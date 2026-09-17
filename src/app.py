@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend — required for Streamlit (no Tkinter/GUI)
 import matplotlib.pyplot as plt
 import os
 import sys

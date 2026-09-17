@@ -17,17 +17,15 @@ env/
 .env/
 .venv/
 
-# Data files (large CSVs)
+# Data files (large CSVs - upload via the app UI instead)
 data/
 *.csv
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Model files (may be large)
-models/*.pkl
-models/*.h5
-models/*.joblib
+# Model checkpoint (duplicate of lstm_model.h5 - not needed)
+models/lstm_model_checkpoint.h5
 
 # Local configuration
 .env

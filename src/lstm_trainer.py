@@ -1,11 +1,26 @@
-import pandas as pd
-import numpy as np
 import os
 import sys
+
+# Ensure TensorFlow's native DLL directory is loaded first on Windows
+_dll_handles = []
+if sys.platform == 'win32':
+    import site
+    for site_pkg in site.getsitepackages() + [os.path.join(sys.prefix, 'Lib', 'site-packages')]:
+        tf_py_dir = os.path.join(site_pkg, 'tensorflow', 'python')
+        if os.path.isdir(tf_py_dir):
+            try:
+                _dll_handles.append(os.add_dll_directory(tf_py_dir))
+            except OSError:
+                pass
+
+# TensorFlow must be imported before pandas/numpy to avoid OpenMP/oneDNN DLL conflicts
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+import pandas as pd
+import numpy as np
 from sklearn.preprocessing import StandardScaler
 import joblib
 
@@ -68,8 +83,9 @@ def build_lstm_model(seq_length=60, n_features=4):
     # Output layer
     model.add(Dense(units=1, activation='tanh'))  # tanh for -1 to 1 range
     
-    # Compile model with binary crossentropy loss and adam optimizer
-    model.compile(optimizer='adam', loss='mse', metrics=['accuracy'])
+    # Compile model with MSE loss (regression output with tanh activation)
+    # Note: do NOT use 'mse' as a metric - it's a loss function, not a Keras 3 metric class
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
     
     return model
 
@@ -83,6 +99,10 @@ def train_lstm_model(save_dir='models'):
     Returns:
         tuple: Trained model and scaler
     """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if not os.path.isabs(save_dir):
+        save_dir = os.path.abspath(os.path.join(project_root, save_dir))
+
     # Create models directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
     

@@ -93,7 +93,9 @@ def generate_signals(df, rf_model_path='../models/random_forest_model.joblib',
     if TENSORFLOW_AVAILABLE:
         try:
             # Load LSTM model, scaler and sequence length
-            lstm_model = load_model(lstm_model_path)
+            # compile=False skips loading the optimizer/metrics, making it compatible
+            # with models saved by older Keras versions (avoids 'mse' metric deserialization error)
+            lstm_model = load_model(lstm_model_path, compile=False)
             lstm_scaler = joblib.load(lstm_scaler_path)
             seq_length = joblib.load(lstm_seq_length_path)
             
@@ -124,9 +126,12 @@ def generate_signals(df, rf_model_path='../models/random_forest_model.joblib',
                     # Predict all sequences
                     predictions = lstm_model.predict(X_scaled_sequences)
                     
-                    # Assign predictions (offset by sequence length)
+                    # Assign predictions using .loc with index labels (avoids SettingWithCopyWarning)
                     pred_signals = [1 if p[0] > 0 else -1 for p in predictions]
-                    df_signals['LSTM_signal'].iloc[seq_length-1:seq_length-1+len(pred_signals)] = pred_signals
+                    start_idx = seq_length - 1
+                    end_idx = start_idx + len(pred_signals)
+                    df_signals.loc[df_signals.index[start_idx:end_idx], 'LSTM_signal'] = pred_signals
+
         except Exception as e:
             print(f"Warning: Could not use LSTM model for predictions: {e}")
     
@@ -154,8 +159,8 @@ def generate_signals(df, rf_model_path='../models/random_forest_model.joblib',
                                mr_weight * df_signals['MR_signal'] + 
                                ml_weight * df_signals['ML_signal'])
     
-    # Scale conviction by signal agreement
-    df_signals['conviction'] = df_signals['signal_agreement'] * df_signals['final_signal'].abs().apply(lambda x: 1 if x > 0 else -1)
+    # Scale conviction by signal agreement (preserve direction of final_signal)
+    df_signals['conviction'] = df_signals['signal_agreement'] * df_signals['final_signal'].apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
     
     return df_signals
 
@@ -234,8 +239,9 @@ def simulate_trades(df, initial_capital=100000, risk_per_trade=0.01, stop_loss_p
             print(f"Stop loss triggered at {current_price:.2f}")
         
         # Update position based on signal if stop loss wasn't triggered
+        # final_signal is a weighted float (e.g. 0.35, -0.7), so use threshold comparison
         if not stop_loss_triggered:
-            if signal == 1 and position == 0:  # Buy signal and not in position
+            if signal > 0 and position == 0:  # Buy signal (positive float) and not in position
                 # Volatility-based position sizing
                 # Use ATR (Average True Range) or volatility for risk calculation
                 # If not available, use a simplified approach with recent volatility
@@ -249,7 +255,7 @@ def simulate_trades(df, initial_capital=100000, risk_per_trade=0.01, stop_loss_p
                     # Fallback if volatility is zero or not available
                     shares = int(cash * 0.95 // current_price)  # Use 95% of available cash
                 
-                if shares > 0:
+                if shares > 0 and cash >= shares * current_price:
                     entry_price = current_price
                     cash -= shares * entry_price
                     position = 1
@@ -257,7 +263,7 @@ def simulate_trades(df, initial_capital=100000, risk_per_trade=0.01, stop_loss_p
                     # Set stop loss price
                     stop_loss_price = entry_price * (1 - stop_loss_pct)
             
-            elif signal == -1 and position == 1:  # Sell signal and in position
+            elif signal < 0 and position == 1:  # Sell signal (negative float) and in position
                 cash += shares * current_price
                 shares = 0
                 position = 0
@@ -300,7 +306,8 @@ def simulate_trades(df, initial_capital=100000, risk_per_trade=0.01, stop_loss_p
         'annualized_return': total_return * (252 / len(df_trades)),
         'sharpe_ratio': sharpe_ratio,
         'max_drawdown': (df_trades['portfolio_value'] / df_trades['portfolio_value'].cummax() - 1).min(),
-        'win_rate': sum(df_trades['returns'] > 0) / len(df_trades['returns'].dropna())
+        # Win rate: among days where we actually had a return (position was active), how many were positive
+        'win_rate': (sum(df_trades['returns'] > 0) / max(sum(df_trades['returns'] != 0), 1))
     }
     
     return df_trades, metrics

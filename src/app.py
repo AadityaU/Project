@@ -410,7 +410,7 @@ def main():
                     signals_table = trades_df[available_columns].copy()
                     
                     # Add color coding based on signal
-                    st.dataframe(signals_table.style.map(
+                    st.dataframe(signals_table.style.applymap(
                         lambda x: 'background-color: #90EE90' if x == 1 else 
                                 ('background-color: #FFA07A' if x == -1 else ''), 
                         subset=['final_signal']

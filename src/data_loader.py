@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-def load_and_process_data(data_dir='../data'):
+def load_and_process_data(data_dir='./../data'):
     """
     Load and process CSV files containing stock data.
     
@@ -12,6 +12,12 @@ def load_and_process_data(data_dir='../data'):
     Returns:
         dict: Dictionary mapping stock names to DataFrames with processed features
     """
+    if not os.path.isabs(data_dir):
+        data_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), data_dir))
+
+    if not os.path.isdir(data_dir):
+        raise FileNotFoundError(f"Data directory not found: {data_dir}")
+
     # Dictionary to store DataFrames
     data_dict = {}
     
@@ -30,10 +36,13 @@ def load_and_process_data(data_dir='../data'):
         # Select required columns
         df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
         
-        # Convert Volume to numeric by removing commas and convert to int
-        if isinstance(df['Volume'].iloc[0], str):
-            df['Volume'] = df['Volume'].str.replace(',', '').astype(float).astype(int)
-            
+        # Convert Volume to numeric by removing commas and handle missing values
+        if df['Volume'].dtype == object or isinstance(df['Volume'].iloc[0], str):
+            df['Volume'] = df['Volume'].astype(str).str.replace(',', '', regex=False)
+            df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
+
+        df['Volume'] = df['Volume'].fillna(0).astype(float)
+
         # Calculate returns
         df['returns'] = (df['Close'] - df['Close'].shift(1)) / df['Close'].shift(1)
         

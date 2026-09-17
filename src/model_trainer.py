@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.data_loader import load_and_process_data, get_combined_data
 
-def train_model(save_dir='../models'):
+def train_model(save_dir='models'):
     """
     Train a Random Forest model on stock data from 2019-2021.
     
@@ -20,6 +20,10 @@ def train_model(save_dir='../models'):
     Returns:
         tuple: Trained model and scaler objects
     """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if not os.path.isabs(save_dir):
+        save_dir = os.path.abspath(os.path.join(project_root, save_dir))
+
     # Create models directory if it doesn't exist
     os.makedirs(save_dir, exist_ok=True)
     
